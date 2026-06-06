@@ -1,0 +1,86 @@
+{
+  "$schema": "aura-mcp-tool-v1",
+  "name": "search-engine",
+  "version": "1.0.0",
+  "description": "Search the web using SerpAPI or similar search providers",
+  "type": "hermes_connector",
+  "executor_service": "hermes",
+  "executor_endpoint": "/tools/execute",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string",
+        "description": "Search query string"
+      },
+      "num_results": {
+        "type": "integer",
+        "default": 10,
+        "description": "Number of results to return"
+      },
+      "language": {
+        "type": "string",
+        "default": "en",
+        "description": "Search language"
+      },
+      "region": {
+        "type": "string",
+        "default": "us",
+        "description": "Search region"
+      }
+    },
+    "required": [
+      "query"
+    ]
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "results": {
+        "type": "array",
+        "description": "Search results",
+        "items": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string"
+            },
+            "link": {
+              "type": "string"
+            },
+            "snippet": {
+              "type": "string"
+            },
+            "position": {
+              "type": "integer"
+            }
+          }
+        }
+      },
+      "total_results": {
+        "type": "integer"
+      },
+      "search_time_ms": {
+        "type": "number"
+      }
+    }
+  },
+  "auth": {
+    "type": "api_key",
+    "key_env": "SERPAPI_KEY"
+  },
+  "rate_limit": {
+    "requests_per_minute": 20
+  },
+  "health_check": {
+    "method": "GET",
+    "path": "/tools/health/search-engine"
+  },
+  "phase": 1,
+  "status": "active",
+  "future_mcp_standard": {
+    "protocol": "mcp-v1",
+    "transport": "streamable-http",
+    "note": "When AURA adopts full MCP protocol, this tool will be exposed as an MCP Server primitive"
+  }
+}

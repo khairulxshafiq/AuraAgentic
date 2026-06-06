@@ -1,0 +1,80 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AURA MCP Tool Manifest",
+  "description": "JSON Schema for validating .tool.json files in AURA",
+  "type": "object",
+  "required": [
+    "name",
+    "version",
+    "description",
+    "type",
+    "executor_service",
+    "executor_endpoint",
+    "input_schema",
+    "output_schema",
+    "phase",
+    "status"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "description": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "hermes_connector"
+      ]
+    },
+    "executor_service": {
+      "type": "string",
+      "enum": [
+        "hermes"
+      ]
+    },
+    "executor_endpoint": {
+      "type": "string"
+    },
+    "input_schema": {
+      "type": "object"
+    },
+    "output_schema": {
+      "type": "object"
+    },
+    "auth": {
+      "type": "object"
+    },
+    "rate_limit": {
+      "type": "object"
+    },
+    "health_check": {
+      "type": "object"
+    },
+    "phase": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "placeholder",
+        "deprecated"
+      ]
+    },
+    "future_mcp_standard": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": false
+}

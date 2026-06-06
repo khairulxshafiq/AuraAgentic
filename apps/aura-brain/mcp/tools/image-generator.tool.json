@@ -1,0 +1,98 @@
+{
+  "$schema": "aura-mcp-tool-v1",
+  "name": "image-generator",
+  "version": "1.0.0",
+  "description": "Generate images via API using text prompts. In Phase 1, may return prompt-only if API unavailable.",
+  "type": "hermes_connector",
+  "executor_service": "hermes",
+  "executor_endpoint": "/tools/execute",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "prompt": {
+        "type": "string",
+        "description": "Image generation prompt"
+      },
+      "negative_prompt": {
+        "type": "string",
+        "default": "",
+        "description": "Negative prompt to exclude elements"
+      },
+      "width": {
+        "type": "integer",
+        "default": 1024,
+        "description": "Image width in pixels"
+      },
+      "height": {
+        "type": "integer",
+        "default": 1024,
+        "description": "Image height in pixels"
+      },
+      "style": {
+        "type": "string",
+        "default": "photorealistic",
+        "description": "Image style preset"
+      },
+      "model": {
+        "type": "string",
+        "default": "flux-pro",
+        "description": "Image generation model"
+      },
+      "steps": {
+        "type": "integer",
+        "default": 30,
+        "description": "Generation steps"
+      },
+      "cfg_scale": {
+        "type": "number",
+        "default": 7.5,
+        "description": "CFG scale for prompt adherence"
+      }
+    },
+    "required": [
+      "prompt"
+    ]
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "image_url": {
+        "type": "string",
+        "description": "Generated image URL (null if prompt-only)"
+      },
+      "prompt_used": {
+        "type": "string",
+        "description": "The prompt that was used"
+      },
+      "model_used": {
+        "type": "string",
+        "description": "Model that generated the image"
+      },
+      "dimensions": {
+        "type": "object",
+        "description": "Width x height"
+      },
+      "generation_time_ms": {
+        "type": "number"
+      }
+    }
+  },
+  "auth": {
+    "type": "api_key",
+    "key_env": "IMAGE_API_KEY"
+  },
+  "rate_limit": {
+    "requests_per_minute": 10
+  },
+  "health_check": {
+    "method": "GET",
+    "path": "/tools/health/image-generator"
+  },
+  "phase": 1,
+  "status": "active",
+  "future_mcp_standard": {
+    "protocol": "mcp-v1",
+    "transport": "streamable-http",
+    "note": "Image generation tool \u2014 will be exposed as MCP Server primitive in Phase 2+"
+  }
+}

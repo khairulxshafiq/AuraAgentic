@@ -1,0 +1,78 @@
+{
+  "$schema": "aura-mcp-tool-v1",
+  "name": "web-scraper",
+  "version": "1.0.0",
+  "description": "Scrapes web page content and extracts structured data",
+  "type": "hermes_connector",
+  "executor_service": "hermes",
+  "executor_endpoint": "/tools/execute",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "url": {
+        "type": "string",
+        "description": "Target URL to scrape"
+      },
+      "depth": {
+        "type": "integer",
+        "default": 1,
+        "description": "How many levels deep to follow links"
+      },
+      "extract_images": {
+        "type": "boolean",
+        "default": false,
+        "description": "Whether to extract image URLs"
+      },
+      "max_content_length": {
+        "type": "integer",
+        "default": 50000,
+        "description": "Maximum characters of content to return"
+      }
+    },
+    "required": [
+      "url"
+    ]
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "content": {
+        "type": "string",
+        "description": "Extracted text content"
+      },
+      "title": {
+        "type": "string",
+        "description": "Page title"
+      },
+      "links": {
+        "type": "array",
+        "description": "Found links"
+      },
+      "images": {
+        "type": "array",
+        "description": "Found image URLs"
+      },
+      "metadata": {
+        "type": "object",
+        "description": "Page metadata"
+      }
+    }
+  },
+  "auth": {
+    "type": "none"
+  },
+  "rate_limit": {
+    "requests_per_minute": 30
+  },
+  "health_check": {
+    "method": "GET",
+    "path": "/tools/health/web-scraper"
+  },
+  "phase": 1,
+  "status": "active",
+  "future_mcp_standard": {
+    "protocol": "mcp-v1",
+    "transport": "streamable-http",
+    "note": "When AURA adopts full MCP protocol, this tool will be exposed as an MCP Server primitive"
+  }
+}

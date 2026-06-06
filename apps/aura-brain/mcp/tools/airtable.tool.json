@@ -1,0 +1,36 @@
+{
+  "$schema": "aura-mcp-tool-v1",
+  "name": "airtable",
+  "version": "0.1.0",
+  "description": "Read/write Airtable bases and tables (Phase 2 \u2014 not yet implemented)",
+  "type": "hermes_connector",
+  "executor_service": "hermes",
+  "executor_endpoint": "/tools/execute",
+  "input_schema": {
+    "type": "object",
+    "properties": {},
+    "required": []
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {}
+  },
+  "auth": {
+    "type": "api_key",
+    "key_env": "AIRTABLE_API_KEY"
+  },
+  "rate_limit": {
+    "requests_per_minute": 30
+  },
+  "health_check": {
+    "method": "GET",
+    "path": "/tools/health/airtable"
+  },
+  "phase": 2,
+  "status": "placeholder",
+  "future_mcp_standard": {
+    "protocol": "mcp-v1",
+    "transport": "streamable-http",
+    "note": "Phase 2 tool \u2014 airtable connector will be implemented in Phase 2"
+  }
+}

@@ -1,0 +1,86 @@
+{
+  "$schema": "aura-plugin-v1",
+  "name": "research-website",
+  "version": "1.0.0",
+  "description": "Research websites, scrape content, and generate structured reports with source citations",
+  "author": "Matrol",
+  "layer_1_rules": {
+    "rules_file": "./rules.md",
+    "persona_override": null,
+    "guardrails": [
+      "no_personal_data_extraction",
+      "respect_robots_txt"
+    ]
+  },
+  "layer_2_skills": [
+    "SKILL_web_research",
+    "SKILL_content_extraction",
+    "SKILL_report_writing",
+    "SKILL_source_citation"
+  ],
+  "layer_3_mcp_tools": [
+    {
+      "tool_ref": "web-scraper",
+      "manifest": "mcp/tools/web-scraper.tool.json",
+      "executor": "hermes",
+      "required": true,
+      "purpose": "Scrape target URL content and extract structured data"
+    },
+    {
+      "tool_ref": "search-engine",
+      "manifest": "mcp/tools/search-engine.tool.json",
+      "executor": "hermes",
+      "required": false,
+      "purpose": "Search web for related sources and supplementary information"
+    }
+  ],
+  "layer_4_subagents": {
+    "required_crew": "research_crew",
+    "crew_endpoint": "${RESEARCH_CREW_URL}/execute",
+    "agents_needed": [
+      "research_analyst",
+      "report_writer"
+    ],
+    "execution_mode": "sequential"
+  },
+  "routing": {
+    "intents": [
+      "research_website",
+      "scrape_website",
+      "summarize_url",
+      "analyze_website",
+      "extract_content",
+      "web_research"
+    ],
+    "keywords": [
+      "research",
+      "scrape",
+      "website",
+      "url",
+      "summarize",
+      "analyze",
+      "extract",
+      "web",
+      "site",
+      "link"
+    ],
+    "priority": 1
+  },
+  "fallback_behavior": {
+    "on_crew_down": "return_error_gracefully",
+    "on_tool_unavailable": {
+      "web-scraper": "return_error",
+      "search-engine": "skip_and_continue"
+    },
+    "on_timeout": "return_partial_result",
+    "fallback_message": "Research service is temporarily unavailable. Please try again shortly."
+  },
+  "output_format": "structured_json",
+  "timeout_ms": 60000,
+  "enabled": true,
+  "metadata": {
+    "category": "research",
+    "phase": 1,
+    "min_brain_version": "1.1.0"
+  }
+}

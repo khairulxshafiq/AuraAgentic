@@ -1,0 +1,76 @@
+{
+  "$schema": "aura-plugin-v1",
+  "name": "image-builder",
+  "version": "1.0.0",
+  "description": "Build optimized image prompts, plan visual styles, and prepare image generation payloads with brand consistency",
+  "author": "Matrol",
+  "layer_1_rules": {
+    "rules_file": "./rules.md",
+    "persona_override": null,
+    "guardrails": [
+      "no_nsfw_content",
+      "brand_consistency_check"
+    ]
+  },
+  "layer_2_skills": [
+    "SKILL_prompt_engineering",
+    "SKILL_style_planning",
+    "SKILL_brand_consistency"
+  ],
+  "layer_3_mcp_tools": [
+    {
+      "tool_ref": "image-generator",
+      "manifest": "mcp/tools/image-generator.tool.json",
+      "executor": "hermes",
+      "required": false,
+      "purpose": "Generate actual image via API (optional - can return prompt only)"
+    }
+  ],
+  "layer_4_subagents": {
+    "required_crew": "image_crew",
+    "crew_endpoint": "${IMAGE_CREW_URL}/execute",
+    "agents_needed": [
+      "visual_designer"
+    ],
+    "execution_mode": "single"
+  },
+  "routing": {
+    "intents": [
+      "build_image",
+      "generate_image",
+      "image_prompt",
+      "visual_design",
+      "create_image",
+      "design_visual"
+    ],
+    "keywords": [
+      "image",
+      "picture",
+      "photo",
+      "visual",
+      "design",
+      "prompt",
+      "generate",
+      "build",
+      "create",
+      "gambar"
+    ],
+    "priority": 1
+  },
+  "fallback_behavior": {
+    "on_crew_down": "return_error_gracefully",
+    "on_tool_unavailable": {
+      "image-generator": "return_prompt_only"
+    },
+    "on_timeout": "return_partial_prompt",
+    "fallback_message": "Image builder is temporarily unavailable."
+  },
+  "output_format": "structured_json",
+  "timeout_ms": 30000,
+  "enabled": true,
+  "metadata": {
+    "category": "creative",
+    "phase": 1,
+    "min_brain_version": "1.1.0"
+  }
+}

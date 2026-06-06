@@ -1,0 +1,81 @@
+{
+  "$schema": "aura-plugin-v1",
+  "name": "facebook-draft",
+  "version": "0.1.0",
+  "description": "Draft Facebook posts with brand voice, hashtags, and media attachments. Does not auto-post without approval.",
+  "author": "Matrol",
+  "layer_1_rules": {
+    "rules_file": "./rules.md",
+    "persona_override": null,
+    "guardrails": [
+      "brand_voice_check",
+      "no_auto_post_without_approval",
+      "content_safety"
+    ]
+  },
+  "layer_2_skills": [
+    "SKILL_social_caption",
+    "SKILL_hashtag_research",
+    "SKILL_content_scheduling"
+  ],
+  "layer_3_mcp_tools": [
+    {
+      "tool_ref": "facebook",
+      "manifest": "mcp/tools/facebook.tool.json",
+      "executor": "hermes",
+      "required": true,
+      "purpose": "Draft and optionally post content to Facebook page"
+    },
+    {
+      "tool_ref": "airtable",
+      "manifest": "mcp/tools/airtable.tool.json",
+      "executor": "hermes",
+      "required": false,
+      "purpose": "Read content from Airtable Content Station for scheduling"
+    }
+  ],
+  "layer_4_subagents": {
+    "required_crew": "socmed_crew",
+    "crew_endpoint": "${SOCMED_CREW_URL}/execute",
+    "agents_needed": [
+      "social_media_manager"
+    ],
+    "execution_mode": "single"
+  },
+  "routing": {
+    "intents": [
+      "draft_facebook",
+      "post_facebook",
+      "facebook_content",
+      "social_media_draft",
+      "create_fb_post"
+    ],
+    "keywords": [
+      "facebook",
+      "fb",
+      "post",
+      "draft",
+      "social media",
+      "sakluma post",
+      "facebook draft"
+    ],
+    "priority": 2
+  },
+  "fallback_behavior": {
+    "on_crew_down": "return_error_gracefully",
+    "on_tool_unavailable": {
+      "facebook": "return_draft_only",
+      "airtable": "skip_and_continue"
+    },
+    "on_timeout": "return_partial_result",
+    "fallback_message": "Facebook drafting service is temporarily unavailable."
+  },
+  "output_format": "structured_json",
+  "timeout_ms": 45000,
+  "enabled": false,
+  "metadata": {
+    "category": "social",
+    "phase": 2,
+    "min_brain_version": "1.2.0"
+  }
+}
