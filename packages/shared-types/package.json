@@ -1,0 +1,7 @@
+{
+  "name": "@aura/shared-types",
+  "version": "1.0.0",
+  "description": "Shared type definitions and factory functions for AURA services",
+  "main": "index.js",
+  "license": "MIT"
+}

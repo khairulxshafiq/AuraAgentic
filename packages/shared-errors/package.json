@@ -1,0 +1,7 @@
+{
+  "name": "@aura/shared-errors",
+  "version": "1.0.0",
+  "description": "Standard error classes for AURA services",
+  "main": "index.js",
+  "license": "MIT"
+}

@@ -1,0 +1,7 @@
+{
+  "name": "@aura/shared-config",
+  "version": "1.0.0",
+  "description": "Configuration loader for AURA services",
+  "main": "index.js",
+  "license": "MIT"
+}
