@@ -1,0 +1,10 @@
+[project]
+name = "aura-crewai"
+version = "1.0.0"
+description = "AURA CrewAI Agents — Multi-Agent AI Planner"
+authors = [{name = "Matrol — Mohammad Khairul Shafiq bin Mohd Nizam"}]
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["crews"]
+python_paths = ["."]

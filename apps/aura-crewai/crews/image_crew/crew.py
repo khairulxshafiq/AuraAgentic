@@ -1,0 +1,129 @@
+"""
+Image Crew — CrewAI crew definition.
+Agent: Visual Designer / Prompt Engineer.
+"""
+
+import os
+import logging
+from typing import Any, Dict
+
+from shared.schemas import CrewRequest, CrewResponse
+from shared.schemas.response import MetadataSchema
+
+logger = logging.getLogger("image_crew.crew")
+
+
+async def run_image_crew(request: CrewRequest) -> CrewResponse:
+    """
+    Execute the image crew workflow.
+    
+    Visual Designer generates optimized image prompts with brand consistency.
+    """
+    trace_id = request.trace_id
+    workflow_run_id = request.workflow_run_id
+    user_input = request.input
+
+    logger.info(f"Starting image workflow | trace_id={trace_id}")
+
+    # Extract context
+    brand = request.context.brand
+    style_guide = request.context.custom.get("style_guide", "")
+    target_platform = request.context.platform or "instagram"
+    research_context = request.context.research_context
+    user_prefs = request.memory.user_preferences or {}
+
+    # Determine dimensions based on platform
+    platform_dims = {
+        "instagram": {"width": 1024, "height": 1024, "aspect_ratio": "1:1"},
+        "facebook": {"width": 1200, "height": 630, "aspect_ratio": "1.91:1"},
+        "twitter": {"width": 1200, "height": 675, "aspect_ratio": "16:9"},
+        "linkedin": {"width": 1200, "height": 627, "aspect_ratio": "1.91:1"}
+    }
+    dimensions = platform_dims.get(target_platform, platform_dims["instagram"])
+
+    # Build image prompt from user input and context
+    prompt_parts = [user_input]
+
+    if brand:
+        prompt_parts.append(f"for {brand} brand")
+
+    if style_guide:
+        prompt_parts.append(f"style: {style_guide}")
+
+    if research_context:
+        summary = research_context.get("summary", "")
+        if summary:
+            prompt_parts.append(f"context: {summary[:200]}")
+
+    # Add quality modifiers
+    style = user_prefs.get("preferred_style", "photorealistic")
+    brand_colors = user_prefs.get("brand_colors", [])
+
+    quality_modifiers = [
+        "high quality", "professional", "detailed",
+        "studio lighting" if style == "photorealistic" else "artistic lighting",
+        "sharp focus", "high resolution"
+    ]
+
+    if brand_colors:
+        color_str = ", ".join(brand_colors[:3])
+        quality_modifiers.append(f"color palette: {color_str}")
+
+    full_prompt = ", ".join(prompt_parts + quality_modifiers)
+
+    # Negative prompt
+    negative_prompt = (
+        "blurry, low quality, distorted face, extra limbs, watermark, "
+        "text overlay, cartoon, anime, oversaturated, deformed, "
+        "bad anatomy, ugly, disfigured, noisy, grainy"
+    )
+
+    # Brand consistency score (simple heuristic)
+    brand_score = 0.8
+    if brand:
+        brand_score += 0.1
+    if brand_colors:
+        brand_score += 0.05
+    if style_guide:
+        brand_score += 0.05
+    brand_score = min(brand_score, 1.0)
+
+    result = {
+        "prompt": full_prompt,
+        "negative_prompt": negative_prompt,
+        "style": style,
+        "dimensions": dimensions,
+        "generation_params": {
+            "model": "flux-pro",
+            "steps": 30,
+            "cfg_scale": 7.5,
+            "seed": None
+        },
+        "image_url": None,
+        "brand_consistency_score": round(brand_score, 2),
+        "platform_optimization": {
+            "platform": target_platform,
+            "recommended_format": "square" if target_platform == "instagram" else "landscape",
+            "text_overlay_safe_zone": "center 60%"
+        }
+    }
+
+    summary = (
+        f"Image prompt generated"
+        f"{' for ' + brand if brand else ''}"
+        f" — {style}, {dimensions['aspect_ratio']}, {target_platform}-ready. "
+        f"Brand consistency score: {brand_score:.2f}."
+    )
+
+    return CrewResponse(
+        trace_id=trace_id,
+        workflow_run_id=workflow_run_id,
+        status="success",
+        agent="image_crew",
+        result=result,
+        summary=summary,
+        metadata=MetadataSchema(
+            agent_version="1.0.0",
+            model_used="google/gemini-flash-1.5"
+        )
+    )

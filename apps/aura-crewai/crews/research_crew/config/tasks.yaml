@@ -1,0 +1,21 @@
+# Research Crew Task Definitions
+
+research_task:
+  description: >
+    Research the provided URL or topic. Extract key content, metadata, 
+    and supplementary information from web searches. Return structured 
+    data including title, content, links, and images.
+  expected_output: >
+    Structured research data including scraped content, search results,
+    and metadata about the researched source.
+  agent: research_analyst
+
+report_task:
+  description: >
+    Synthesize the research findings into a structured report. Include 
+    a title, executive summary, key findings (as bullet points), extracted 
+    data metrics, and source citations.
+  expected_output: >
+    A structured JSON report with title, summary, key_findings array,
+    extracted_data object, and sources array.
+  agent: report_writer

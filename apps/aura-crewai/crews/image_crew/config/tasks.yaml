@@ -1,0 +1,13 @@
+# Image Crew Task Definitions
+
+image_prompt_task:
+  description: >
+    Generate an optimized image prompt based on the user's request.
+    Consider brand identity, target platform, style preferences, and 
+    any research context provided. Include negative prompts and 
+    generation parameters.
+  expected_output: >
+    A structured JSON result with prompt, negative_prompt, style, 
+    dimensions, generation_params, brand_consistency_score, and 
+    platform_optimization.
+  agent: visual_designer
