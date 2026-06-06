@@ -1,0 +1,25 @@
+{
+  "name": "aura-agentic",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AURA Agentic AI \u2014 Monorepo Architecture",
+  "author": "Matrol \u2014 Mohammad Khairul Shafiq bin Mohd Nizam",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "clean": "turbo run clean",
+    "gateway:dev": "pnpm --filter @aura/gateway dev",
+    "brain:dev": "pnpm --filter @aura/brain dev",
+    "typecheck": "turbo run typecheck"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0"
+  }
+}

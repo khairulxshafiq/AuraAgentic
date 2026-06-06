@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  gateway:
+    build: ./apps/gateway
+    ports:
+      - "3000:3000"
+    env_file:
+      - apps/gateway/.env
+    depends_on:
+      - brain
+    networks:
+      - aura-network
+
+  brain:
+    build: ./apps/aura-brain
+    ports:
+      - "3001:3001"
+    env_file:
+      - apps/aura-brain/.env
+    depends_on:
+      - hermes
+    networks:
+      - aura-network
+
+  research-crew:
+    build: ./apps/aura-crewai
+    ports:
+      - "8003:8003"
+    env_file:
+      - apps/aura-crewai/.env
+    command: uvicorn crews.research_crew.main:app --host 0.0.0.0 --port 8003
+    depends_on:
+      - hermes
+    networks:
+      - aura-network
+
+  image-crew:
+    build: ./apps/aura-crewai
+    ports:
+      - "8004:8004"
+    env_file:
+      - apps/aura-crewai/.env
+    command: uvicorn crews.image_crew.main:app --host 0.0.0.0 --port 8004
+    depends_on:
+      - hermes
+    networks:
+      - aura-network
+
+  hermes:
+    build: ./apps/aura-hermes
+    ports:
+      - "5000:5000"
+    env_file:
+      - apps/aura-hermes/.env
+    networks:
+      - aura-network
+
+networks:
+  aura-network:
+    driver: bridge
