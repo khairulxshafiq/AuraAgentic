@@ -21,14 +21,6 @@
       "dependsOn": [
         "build"
       ]
-    },
-    "clean": {
-      "cache": false
-    },
-    "typecheck": {
-      "dependsOn": [
-        "^build"
-      ]
     }
   }
 }
