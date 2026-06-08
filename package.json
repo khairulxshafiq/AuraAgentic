@@ -11,7 +11,7 @@
     "dev:brain": "node --watch apps/aura-brain/server.js"
   },
   "engines": {
-    "node": ">=20.0.0",
+    "node": ">=22.x",
     "pnpm": ">=8.0.0"
   }
 }
