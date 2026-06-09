@@ -13,6 +13,9 @@
     "@aura/shared-logger": "workspace:*",
     "@aura/shared-utils": "workspace:*",
     "@aura/shared-config": "workspace:*",
-    "@aura/shared-errors": "workspace:*"
+    "@aura/shared-errors": "workspace:*",
+    "@aura/shared-types": "workspace:*",
+    "@aura/shared-utils": "workspace:*",
+    "@aura/shared-logger": "workspace:*"
   }
 }
