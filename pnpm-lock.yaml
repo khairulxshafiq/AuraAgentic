@@ -52,6 +52,9 @@ importers:
       '@aura/shared-logger':
         specifier: workspace:*
         version: link:../../packages/shared-logger
+      '@aura/shared-types':
+        specifier: workspace:*
+        version: link:../../packages/shared-types
       '@aura/shared-utils':
         specifier: workspace:*
         version: link:../../packages/shared-utils
