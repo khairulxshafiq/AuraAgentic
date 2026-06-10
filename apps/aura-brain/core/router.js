@@ -170,9 +170,13 @@ class Router {
     // Save conversation
     try {
       await saveConversation({
-        chat_id, user_message: userMessage, bot_response: finalResponse,
-        intent: 'chat', mode: 'direct', trace_id
-      });
+	chat_id, user_message: userMessage, bot_response: finalResponse,
+	intent: 'chat', mode: 'direct', trace_id,
+	model_used: model,
+	tokens_used: tokensUsed,
+	response_time_ms: Date.now() - startTime,
+	source: 'telegram'
+	});
     } catch (err) {
       this.logger.warn({ trace_id, error: err.message }, 'Failed to save conversation');
     }
