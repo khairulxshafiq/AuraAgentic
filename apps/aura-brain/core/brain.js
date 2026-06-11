@@ -8,6 +8,7 @@
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const DEFAULT_MODEL = process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini';;
+const { buildSystemPrompt } = require('../persona/system-prompt-builder');
 
 class Brain {
   /**
@@ -138,7 +139,14 @@ Examples:
    * @returns {Promise<Object>} {content, tokensUsed, model}
    */
   async generateDirectResponse(userMessage, systemPrompt, conversationHistory = [], memories = []) {
-    const messages = [{ role: 'system', content: systemPrompt }];
+    const dynamicSystemPrompt = buildSystemPrompt({
+      userMessage,
+      conversationHistory,
+      userPreferences: undefined,
+      memories
+    });
+
+    const messages = [{ role: 'system', content: dynamicSystemPrompt }];
 
     // Inject memories as context
     if (memories.length > 0) {

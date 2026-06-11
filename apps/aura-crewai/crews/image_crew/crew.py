@@ -42,7 +42,11 @@ async def run_image_crew(request: CrewRequest) -> CrewResponse:
     dimensions = platform_dims.get(target_platform, platform_dims["instagram"])
 
     # Build image prompt from user input and context
-    prompt_parts = [user_input]
+    prompt_parts = []
+    if user_input:
+        prompt_parts.append(user_input.strip())
+    else:
+        prompt_parts.append("Generate a visually compelling image")
 
     if brand:
         prompt_parts.append(f"for {brand} brand")
@@ -90,29 +94,16 @@ async def run_image_crew(request: CrewRequest) -> CrewResponse:
 
     result = {
         "prompt": full_prompt,
-        "negative_prompt": negative_prompt,
         "style": style,
-        "dimensions": dimensions,
-        "generation_params": {
-            "model": "flux-pro",
-            "steps": 30,
-            "cfg_scale": 7.5,
-            "seed": None
-        },
-        "image_url": None,
-        "brand_consistency_score": round(brand_score, 2),
-        "platform_optimization": {
-            "platform": target_platform,
-            "recommended_format": "square" if target_platform == "instagram" else "landscape",
-            "text_overlay_safe_zone": "center 60%"
-        }
+        "dimensions": f"{dimensions['width']}x{dimensions['height']}",
+        "negative_prompt": negative_prompt
     }
 
     summary = (
-        f"Image prompt generated"
-        f"{' for ' + brand if brand else ''}"
-        f" — {style}, {dimensions['aspect_ratio']}, {target_platform}-ready. "
-        f"Brand consistency score: {brand_score:.2f}."
+        f"Image prompt generated from the request "
+        f"'{user_input}'"
+        f" with style {style} for {target_platform} "
+        f"({dimensions['aspect_ratio']}, {dimensions['width']}x{dimensions['height']})."
     )
 
     return CrewResponse(
