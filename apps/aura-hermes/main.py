@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from mcp.tool_registry import build_registry
 from mcp.tool_executor import ToolExecutor
 from routes.tools import create_tools_router
+from routes.mcp import create_mcp_router
 from routes.log import router as log_router
 from routes.health import router as health_router
 
@@ -44,6 +45,7 @@ app.state.executor = executor
 
 # Mount routes
 app.include_router(create_tools_router(executor, registry), prefix="/tools")
+app.include_router(create_mcp_router(registry), prefix="/mcp")
 app.include_router(log_router)
 app.include_router(health_router)
 
