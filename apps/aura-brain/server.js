@@ -18,6 +18,7 @@ const PluginRegistry = require('./plugins/plugin-registry');
 const { loadPlugins } = require('./plugins/loader');
 const ServiceRegistry = require('./registry/service-registry');
 const processRoute = require('./routes/process');
+const executeWorkflowRoute = require('./routes/execute-workflow');
 const healthRoute = require('./routes/health');
 
 const logger = createLogger('brain');
@@ -36,7 +37,7 @@ async function main() {
 
     // ─── Initialize MCP Registry ───
     const mcpRegistry = new MCPRegistry(logger);
-    mcpRegistry.load();
+    await mcpRegistry.load(config.hermesUrl);
 
     // ─── Initialize MCP Client ───
     const mcpClient = new MCPClient(config.hermesUrl, logger);
@@ -72,29 +73,77 @@ async function main() {
     app.locals.serviceRegistry = serviceRegistry;
 
     // ─── Routes ───
-    app.use('/process', processRoute);
     app.use('/health', healthRoute);
 
-    // Phase 2 stubs
+    // Dynamic service registration (Issue 6)
     app.post('/register', (req, res) => {
-      logger.info({ body: req.body }, 'Service registration received (Phase 2)');
-      res.json({ status: 'acknowledged', phase: 2, message: 'Dynamic registration available in Phase 2' });
+      const { service_name, url, agents_count, capabilities } = req.body;
+      if (!service_name || !url) {
+        return res.status(400).json({ status: 'error', error: 'Missing service_name or url' });
+      }
+      serviceRegistry.services.set(service_name, {
+        service_name,
+        url,
+        status: 'healthy',
+        capabilities: capabilities || [],
+        version: '1.0.0',
+        agents_count: agents_count || 0,
+        last_checked_at: new Date().toISOString(),
+        endpoints: {
+          execute: '/execute',
+          health: '/health'
+        }
+      });
+      logger.info({ service_name, url }, 'Dynamic service registered');
+      res.json({ status: 'success', message: `Registered ${service_name}` });
     });
 
     app.post('/heartbeat', (req, res) => {
-      logger.info({ body: req.body }, 'Heartbeat received (Phase 2)');
-      res.json({ status: 'acknowledged', phase: 2 });
+      const { service_name } = req.body;
+      if (!service_name) {
+        return res.status(400).json({ status: 'error', error: 'Missing service_name' });
+      }
+      const service = serviceRegistry.services.get(service_name);
+      if (service) {
+        service.status = 'healthy';
+        service.last_checked_at = new Date().toISOString();
+        res.json({ status: 'success' });
+      } else {
+        res.status(404).json({ status: 'error', error: 'Service not registered' });
+      }
     });
 
-    // ─── Start server ───
-    app.listen(config.port, '0.0.0.0', () => {
-      logger.info({
-        port: config.port,
-        plugins: pluginRegistry.count,
-        tools: mcpRegistry.getActiveTools().length,
-        services: serviceRegistry.getServiceNames().length
-      }, `Aura-Brain started on port ${config.port}`);
-    });
+    // ─── Start server conditionally (Issue 2) ───
+    let listenPort;
+    if (config.brainMode === 'worker') {
+      app.use('/execute-workflow', executeWorkflowRoute);
+      try {
+        listenPort = new URL(config.workerUrl).port || 3002;
+      } catch (err) {
+        listenPort = 3002;
+      }
+      app.listen(listenPort, '0.0.0.0', () => {
+        logger.info({
+          port: listenPort,
+          mode: 'worker',
+          plugins: pluginRegistry.count,
+          tools: mcpRegistry.getActiveTools().length,
+          services: serviceRegistry.getServiceNames().length
+        }, `Aura-Brain Worker started on port ${listenPort}`);
+      });
+    } else {
+      app.use('/process', processRoute);
+      listenPort = config.port || 3001;
+      app.listen(listenPort, '0.0.0.0', () => {
+        logger.info({
+          port: listenPort,
+          mode: 'router',
+          plugins: pluginRegistry.count,
+          tools: mcpRegistry.getActiveTools().length,
+          services: serviceRegistry.getServiceNames().length
+        }, `Aura-Brain Router started on port ${listenPort}`);
+      });
+    }
 
   } catch (error) {
     logger.fatal({ error: error.message }, 'Brain failed to start');

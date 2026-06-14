@@ -22,17 +22,30 @@ router.post('/', async (req, res) => {
       });
     }
 
-    const brainRouter = new Router(req.app);
-    const result = await brainRouter.processRequest(gatewayRequest);
+    // Immediately accept request
+    res.status(202).json({
+      status: 'queued',
+      trace_id: gatewayRequest.trace_id
+    });
 
-    res.json(result);
+    // Process asynchronously in background
+    (async () => {
+      try {
+        const brainRouter = new Router(req.app);
+        await brainRouter.processRequestAsync(gatewayRequest);
+      } catch (err) {
+        logger.error({ error: err.message, trace_id: gatewayRequest.trace_id }, 'Async background processing error');
+      }
+    })();
+
   } catch (error) {
     logger.error({ error: error.message }, 'POST /process error');
-    res.status(500).json({
-      status: 'error',
-      response: 'Internal server error',
-      error: error.message
-    });
+    if (!res.headersSent) {
+      res.status(500).json({
+        status: 'error',
+        error: error.message
+      });
+    }
   }
 });
 

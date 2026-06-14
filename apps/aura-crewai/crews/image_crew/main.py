@@ -86,3 +86,34 @@ async def health():
         last_request_at=last_request_at,
         active_requests=active_requests
     )
+
+
+@app.on_event("startup")
+async def startup_event():
+    import httpx
+    import asyncio
+
+    async def register():
+        brain_url = os.environ.get("BRAIN_URL", "http://localhost:3001")
+        service_url = os.environ.get("SERVICE_URL", "http://localhost:8004")
+        for i in range(10):
+            try:
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(
+                        f"{brain_url}/register",
+                        json={
+                            "service_name": "image_crew",
+                            "url": service_url,
+                            "agents_count": 1,
+                            "capabilities": ["image"]
+                        },
+                        timeout=5.0
+                    )
+                    if response.status_code == 200:
+                        logger.info("Successfully registered image_crew with Brain")
+                        break
+            except Exception as e:
+                logger.warning(f"Failed to register image_crew with Brain (attempt {i+1}): {e}")
+                await asyncio.sleep(2)
+
+    asyncio.create_task(register())

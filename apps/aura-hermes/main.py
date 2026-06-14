@@ -59,3 +59,34 @@ async def root():
         "status": "online",
         "tools_registered": registry.count
     }
+
+
+@app.on_event("startup")
+async def startup_event():
+    import httpx
+    import asyncio
+
+    async def register():
+        brain_url = os.environ.get("BRAIN_URL", "http://localhost:3001")
+        service_url = os.environ.get("SERVICE_URL", "http://localhost:5000")
+        for i in range(10):
+            try:
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(
+                        f"{brain_url}/register",
+                        json={
+                            "service_name": "hermes",
+                            "url": service_url,
+                            "agents_count": 0,
+                            "capabilities": ["tools"]
+                        },
+                        timeout=5.0
+                    )
+                    if response.status_code == 200:
+                        logger.info("Successfully registered hermes with Brain")
+                        break
+            except Exception as e:
+                logger.warning(f"Failed to register hermes with Brain (attempt {i+1}): {e}")
+                await asyncio.sleep(2)
+
+    asyncio.create_task(register())

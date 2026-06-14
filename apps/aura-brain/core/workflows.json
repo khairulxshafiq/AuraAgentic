@@ -1,0 +1,24 @@
+{
+  "multi_step_campaign": {
+    "steps": [
+      {
+        "id": "research",
+        "action": "research",
+        "depends_on": [],
+        "inputs": {
+          "userMessage": "$input.userMessage",
+          "memories": "$input.memories"
+        }
+      },
+      {
+        "id": "image",
+        "action": "image",
+        "depends_on": ["research"],
+        "inputs": {
+          "userMessage": "$input.userMessage",
+          "context": "$steps.research.result"
+        }
+      }
+    ]
+  }
+}

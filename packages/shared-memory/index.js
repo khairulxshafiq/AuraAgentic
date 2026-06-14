@@ -36,18 +36,79 @@ function getClient() {
   return _client;
 }
 
+// ─── Cache system (Simulated/Optional Redis Cache Store) ───
+let redisClient = null;
+const memoryCache = new Map();
+
+if (process.env.REDIS_URL) {
+  try {
+    const Redis = require('ioredis');
+    redisClient = new Redis(process.env.REDIS_URL);
+    console.log('Redis Cache initialized for AURA shared-memory');
+  } catch (err) {
+    // Graceful degradation: log warning and run in-memory
+    console.warn('Redis package not installed or failed to connect, falling back to in-memory caching:', err.message);
+  }
+}
+
+async function getCachedData(key) {
+  if (redisClient) {
+    try {
+      const val = await redisClient.get(key);
+      return val ? JSON.parse(val) : null;
+    } catch (_) {}
+  }
+  const item = memoryCache.get(key);
+  if (item && item.expiresAt > Date.now()) {
+    return item.value;
+  }
+  if (item) {
+    memoryCache.delete(key);
+  }
+  return null;
+}
+
+async function setCachedData(key, value, ttlSeconds = 3600) {
+  if (redisClient) {
+    try {
+      await redisClient.set(key, JSON.stringify(value), 'EX', ttlSeconds);
+    } catch (_) {}
+  }
+  memoryCache.set(key, {
+    value,
+    expiresAt: Date.now() + (ttlSeconds * 1000)
+  });
+}
+
+async function invalidateCachePattern(pattern) {
+  if (redisClient) {
+    try {
+      const keys = await redisClient.keys(pattern);
+      if (keys.length > 0) {
+        await redisClient.del(...keys);
+      }
+    } catch (_) {}
+  }
+  
+  const regexStr = '^' + pattern.replace(/\*/g, '.*') + '$';
+  const regex = new RegExp(regexStr);
+  for (const key of memoryCache.keys()) {
+    if (regex.test(key)) {
+      memoryCache.delete(key);
+    }
+  }
+}
+
 // ─────────────────────────────────────
 // CONVERSATIONS (aura_conversations)
 // ─────────────────────────────────────
 
-/**
- * Save a conversation exchange.
- * @param {Object} params
- * @returns {Promise<Object>}
- */
 async function saveConversation({ chat_id, user_message, bot_response, intent, mode, trace_id }) {
+  // Invalidate history cache for this chat
+  await invalidateCachePattern(`history:${chat_id}:*`);
+
   const client = getClient();
-  const { data, error } = await client
+  const writePromise = client
     .from('aura_conversations')
     .insert({
       chat_id,
@@ -61,8 +122,10 @@ async function saveConversation({ chat_id, user_message, bot_response, intent, m
     .select()
     .single();
 
-  if (error) throw new Error(`Failed to save conversation: ${error.message}`);
-  return data;
+  // Write-back: run write in the background and log error if any
+  writePromise.catch(err => console.error('Supabase async write error (conversation):', err.message));
+
+  return { chat_id, user_message, bot_response, intent, mode, trace_id };
 }
 
 /**
@@ -72,6 +135,10 @@ async function saveConversation({ chat_id, user_message, bot_response, intent, m
  * @returns {Promise<Array>}
  */
 async function getConversationHistory(chatId, limit = 10) {
+  const cacheKey = `history:${chatId}:${limit}`;
+  const cached = await getCachedData(cacheKey);
+  if (cached) return cached;
+
   const client = getClient();
   const { data, error } = await client
     .from('aura_conversations')
@@ -81,21 +148,21 @@ async function getConversationHistory(chatId, limit = 10) {
     .limit(limit);
 
   if (error) throw new Error(`Failed to get conversation history: ${error.message}`);
-  return (data || []).reverse();
+  const result = (data || []).reverse();
+  await setCachedData(cacheKey, result, 300); // cache for 5 minutes
+  return result;
 }
 
 // ─────────────────────────────────────
 // MEMORIES (memories)
 // ─────────────────────────────────────
 
-/**
- * Write a long-term memory.
- * @param {Object} params
- * @returns {Promise<Object>}
- */
 async function writeMemory({ user_id, memory_type, content, importance = 0.5 }) {
+  // Invalidate cache for user memories
+  await invalidateCachePattern(`memories:${user_id}:*`);
+
   const client = getClient();
-  const { data, error } = await client
+  const writePromise = client
     .from('memories')
     .insert({
       user_id,
@@ -107,8 +174,9 @@ async function writeMemory({ user_id, memory_type, content, importance = 0.5 }) 
     .select()
     .single();
 
-  if (error) throw new Error(`Failed to write memory: ${error.message}`);
-  return data;
+  writePromise.catch(err => console.error('Supabase async write error (memory):', err.message));
+
+  return { user_id, memory_type, content, importance };
 }
 
 /**
@@ -118,6 +186,10 @@ async function writeMemory({ user_id, memory_type, content, importance = 0.5 }) 
  * @returns {Promise<Array>}
  */
 async function readMemories(userId, limit = 20) {
+  const cacheKey = `memories:${userId}:${limit}`;
+  const cached = await getCachedData(cacheKey);
+  if (cached) return cached;
+
   const client = getClient();
   const { data, error } = await client
     .from('memories')
@@ -128,7 +200,9 @@ async function readMemories(userId, limit = 20) {
     .limit(limit);
 
   if (error) throw new Error(`Failed to read memories: ${error.message}`);
-  return data || [];
+  const result = data || [];
+  await setCachedData(cacheKey, result, 600); // cache for 10 minutes
+  return result;
 }
 
 /**
@@ -167,12 +241,11 @@ async function searchMemories(userId, query, limit = 10) {
 // PREFERENCES (aura_preferences)
 // ─────────────────────────────────────
 
-/**
- * Get user preferences.
- * @param {string} userId
- * @returns {Promise<Object>}
- */
 async function getPreferences(userId) {
+  const cacheKey = `preferences:${userId}`;
+  const cached = await getCachedData(cacheKey);
+  if (cached) return cached;
+
   const client = getClient();
   const { data, error } = await client
     .from('aura_preferences')
@@ -185,6 +258,8 @@ async function getPreferences(userId) {
   (data || []).forEach(row => {
     prefs[row.preference_key] = row.preference_value;
   });
+  
+  await setCachedData(cacheKey, prefs, 1800); // cache for 30 minutes
   return prefs;
 }
 
@@ -194,8 +269,10 @@ async function getPreferences(userId) {
  * @returns {Promise<Object>}
  */
 async function setPreference({ user_id, preference_key, preference_value, category = 'general' }) {
+  await invalidateCachePattern(`preferences:${user_id}`);
+
   const client = getClient();
-  const { data, error } = await client
+  const writePromise = client
     .from('aura_preferences')
     .upsert({
       user_id,
@@ -207,8 +284,9 @@ async function setPreference({ user_id, preference_key, preference_value, catego
     .select()
     .single();
 
-  if (error) throw new Error(`Failed to set preference: ${error.message}`);
-  return data;
+  writePromise.catch(err => console.error('Supabase async write error (preference):', err.message));
+
+  return { user_id, preference_key, preference_value, category };
 }
 
 // ─────────────────────────────────────

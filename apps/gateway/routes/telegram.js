@@ -80,17 +80,10 @@ router.post('/', async (req, res) => {
     }
 
     const brainResult = await brainResponse.json();
-
-    // Send final response to Telegram
-    const responseText = brainResult.response || brainResult.summary || 'I processed your request but have no response to show.';
-
-    await sendMessage(config.telegramBotToken, chat_id, responseText);
-
     logger.info({
       trace_id, chat_id,
-      status: brainResult.status,
-      mode: brainResult.metadata?.mode
-    }, 'Response sent to Telegram');
+      status: brainResult.status
+    }, 'Request accepted by Brain');
 
   } catch (error) {
     logger.error({ error: error.message }, 'Telegram webhook processing error');
