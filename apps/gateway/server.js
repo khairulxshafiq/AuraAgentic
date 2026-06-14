@@ -12,6 +12,7 @@ const { createLogger } = require('@aura/shared-logger');
 const { loadGatewayConfig } = require('@aura/shared-config');
 
 const telegramRoute = require('./routes/telegram');
+const replyRoute = require('./routes/reply');
 const healthRoute = require('./routes/health');
 const servicesRoute = require('./routes/services');
 
@@ -35,6 +36,7 @@ async function main() {
     });
 
     app.use('/telegram', telegramRoute);
+    app.use('/telegram/reply', replyRoute);
     app.use('/health', healthRoute);
     app.use('/services', servicesRoute);
 

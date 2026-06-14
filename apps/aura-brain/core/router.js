@@ -156,6 +156,143 @@ class Router {
   }
 
   /**
+   * Process a request asynchronously.
+   * Classifies intent, and either routes the workflow to the worker or executes simple chats locally.
+   * Finally posts the result back to Gateway callback.
+   * @param {Object} gatewayRequest
+   */
+  async processRequestAsync(gatewayRequest) {
+    const startTime = Date.now();
+    const trace_id = gatewayRequest.trace_id || generateTraceId();
+    const chat_id = gatewayRequest.chat_id;
+    const userMessage = gatewayRequest.user_message;
+
+    this.logger.info({ trace_id, chat_id }, 'Router: processing request asynchronously');
+
+    try {
+      // Step 2: Load user memory from Supabase
+      let memories = [];
+      let conversationHistory = [];
+      try {
+        memories = await readMemories(chat_id, 10);
+        conversationHistory = await getConversationHistory(chat_id, 10);
+      } catch (err) {
+        this.logger.warn({ trace_id, error: err.message }, 'Failed to load memory, proceeding without');
+      }
+
+      // Step 3: LLM intent detection
+      const registeredIntents = Object.keys(this.pluginRegistry.getIntentMap());
+      registeredIntents.push('chat', 'greeting', 'qa', 'multi_step_campaign');
+
+      const { intent, confidence, entities } = await this.brain.detectIntent(
+        userMessage,
+        registeredIntents,
+        conversationHistory
+      );
+
+      this.logger.info({ trace_id, intent, confidence }, 'Intent detected async');
+
+      // Step 4: Check Plugin Registry
+      let plugin = this.pluginRegistry.lookupByIntent(intent);
+      if (!plugin && intent === 'chat') {
+        plugin = this.pluginRegistry.lookupByKeyword(userMessage);
+      }
+
+      // If no plugin match, do direct LLM
+      if (!plugin) {
+        const result = await this._handleDirectLLM(trace_id, chat_id, userMessage, conversationHistory, memories, startTime);
+        await this._sendReplyToGateway(chat_id, result.response, trace_id);
+        return;
+      }
+
+      // Log plugin match
+      await savePluginEvent({
+        trace_id, plugin_name: plugin.name, event_type: 'matched', intent, details: { confidence }
+      });
+
+      // Step 5: Check MCP Tool Registry
+      const requiredTools = (plugin.layer_3_mcp_tools || []).filter(t => t.required);
+      for (const tool of requiredTools) {
+        if (!this.mcpHealth.isToolAvailable(tool.tool_ref)) {
+          const fallback = plugin.fallback_behavior?.on_tool_unavailable?.[tool.tool_ref];
+          if (fallback === 'return_error') {
+            const fallbackMsg = plugin.fallback_behavior?.fallback_message || 'Required tool is unavailable.';
+            await this._sendReplyToGateway(chat_id, fallbackMsg, trace_id);
+            return;
+          }
+        }
+      }
+
+      // Step 6: Check Service Registry
+      const requiredCrew = plugin.layer_4_subagents?.required_crew;
+      if (requiredCrew && !this.serviceRegistry.isServiceHealthy(requiredCrew)) {
+        const fallback = plugin.fallback_behavior?.on_crew_down;
+        if (fallback === 'return_error_gracefully') {
+          const fallbackMsg = plugin.fallback_behavior?.fallback_message || 'Service temporarily unavailable.';
+          await this._sendReplyToGateway(chat_id, fallbackMsg, trace_id);
+          return;
+        }
+      }
+
+      // Step 7: Determine execution path
+
+      // Workflow routing (Complex campaigns) -> Forward to Worker
+      if (intent === 'multi_step_campaign' || (entities.actions && entities.actions.length > 1)) {
+        this.logger.info({ trace_id, intent }, 'Routing complex workflow to Worker');
+        
+        const response = await fetch(`${this.config.workerUrl}/execute-workflow`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            trace_id,
+            chat_id,
+            user_message: userMessage,
+            entities,
+            memories,
+            conversationHistory
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`Worker returned status: ${response.status}`);
+        }
+        return;
+      }
+
+      // CrewAI Agent Execution
+      if (requiredCrew) {
+        this.logger.info({ trace_id, intent, crew: requiredCrew }, 'Executing CrewAI job async');
+        const result = await this._handleCrewAI(trace_id, chat_id, userMessage, intent, plugin, memories, conversationHistory, startTime);
+        await this._sendReplyToGateway(chat_id, result.response, trace_id);
+        return;
+      }
+
+      // Hermes Direct Tool Execution
+      const result = await this._handleDirectLLM(trace_id, chat_id, userMessage, conversationHistory, memories, startTime);
+      await this._sendReplyToGateway(chat_id, result.response, trace_id);
+
+    } catch (error) {
+      this.logger.error({ trace_id, error: error.message }, 'Router async error');
+      await this._sendReplyToGateway(chat_id, 'I encountered an error processing your request. Please try again.', trace_id);
+    }
+  }
+
+  /**
+   * Helper to send replies back to the Gateway.
+   */
+  async _sendReplyToGateway(chat_id, response, trace_id) {
+    try {
+      await fetch(`${this.config.gatewayUrl}/telegram/reply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id, response, trace_id })
+      });
+    } catch (err) {
+      this.logger.error({ error: err.message, trace_id }, 'Failed to send reply to Gateway');
+    }
+  }
+
+  /**
    * Handle direct LLM reply (simple chat, Q&A).
    */
   async _handleDirectLLM(trace_id, chat_id, userMessage, conversationHistory, memories, startTime) {

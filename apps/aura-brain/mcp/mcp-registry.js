@@ -17,10 +17,10 @@ class MCPRegistry {
   }
 
   /**
-   * Load all .tool.json files from the tools directory.
+   * Load all .tool.json files from the tools directory and fetch dynamic tools from Hermes.
    * Called on Brain startup.
    */
-  load() {
+  async load(hermesUrl = null) {
     const toolsDir = path.join(__dirname, 'tools');
 
     if (!fs.existsSync(toolsDir)) {
@@ -54,6 +54,41 @@ class MCPRegistry {
         }, `MCP tool loaded: ${manifest.name}`);
       } catch (err) {
         this.logger.error({ file, error: err.message }, `Failed to load tool manifest: ${file}`);
+      }
+    }
+
+    // Dynamic discovery from Hermes if available (Issue 5)
+    if (hermesUrl) {
+      try {
+        this.logger.info({ url: hermesUrl }, 'Attempting dynamic tool discovery from Hermes');
+        const response = await fetch(`${hermesUrl}/mcp/tools/list`, {
+          signal: AbortSignal.timeout(5000)
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          const hermesTools = data.tools || [];
+          for (const tool of hermesTools) {
+            this.tools.set(tool.name, {
+              manifest: {
+                name: tool.name,
+                version: "1.0.0",
+                description: tool.description || '',
+                phase: 1,
+                status: "active",
+                executor_service: "hermes",
+                input_schema: tool.inputSchema || {}
+              },
+              file: 'dynamic_discovery',
+              loaded_at: new Date().toISOString()
+            });
+            this.logger.info({ tool: tool.name }, `MCP dynamic tool registered: ${tool.name}`);
+          }
+        } else {
+          this.logger.warn({ status: response.status }, 'Hermes dynamic discovery returned non-OK');
+        }
+      } catch (err) {
+        this.logger.warn({ error: err.message }, 'Failed to fetch dynamic tools from Hermes, relying on static manifests');
       }
     }
 

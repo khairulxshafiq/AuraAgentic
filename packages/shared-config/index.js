@@ -75,7 +75,10 @@ function loadBrainConfig() {
     supabaseServiceRoleKey: getEnv('SUPABASE_SERVICE_ROLE_KEY'),
     logLevel: getEnv('LOG_LEVEL', 'info'),
     healthCheckIntervalMs: getEnvInt('HEALTH_CHECK_INTERVAL_MS', 60000),
-    defaultTimeoutMs: getEnvInt('DEFAULT_TIMEOUT_MS', 60000)
+    defaultTimeoutMs: getEnvInt('DEFAULT_TIMEOUT_MS', 60000),
+    workerUrl: getEnv('WORKER_URL', 'http://localhost:3002'),
+    brainMode: getEnv('BRAIN_MODE', 'router'),
+    gatewayUrl: getEnv('GATEWAY_URL', 'http://localhost:3000')
   };
 }
 

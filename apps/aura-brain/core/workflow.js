@@ -6,6 +6,8 @@
 
 'use strict';
 
+const fs = require('fs');
+const path = require('path');
 const { generateWorkflowRunId, nowISO, withTimeout } = require('@aura/shared-utils');
 const { createCrewRequest } = require('@aura/shared-types');
 const {
@@ -26,6 +28,16 @@ class WorkflowOrchestrator {
     this.config = router.config;
     this.serviceRegistry = router.serviceRegistry;
     this.mcpClient = router.mcpClient;
+    this.workflows = {};
+
+    try {
+      const configPath = path.join(__dirname, 'workflows.json');
+      if (fs.existsSync(configPath)) {
+        this.workflows = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+      }
+    } catch (err) {
+      this.logger.error({ error: err.message }, 'Failed to load workflows.json configuration');
+    }
   }
 
   /**
@@ -40,92 +52,134 @@ class WorkflowOrchestrator {
    */
   async execute(trace_id, chat_id, userMessage, entities, memories, conversationHistory) {
     const workflow_run_id = generateWorkflowRunId();
-    const actions = entities.actions || ['research', 'image'];
-    const totalSteps = actions.length;
+    const workflowType = entities.workflow_type || 'multi_step_campaign';
+    const workflowDef = this.workflows[workflowType] || {
+      steps: [
+        {
+          id: 'research',
+          action: 'research',
+          depends_on: [],
+          inputs: { userMessage: '$input.userMessage', memories: '$input.memories' }
+        },
+        {
+          id: 'image',
+          action: 'image',
+          depends_on: ['research'],
+          inputs: { userMessage: '$input.userMessage', context: '$steps.research.result' }
+        }
+      ]
+    };
+
+    const steps = workflowDef.steps;
+    const totalSteps = steps.length;
 
     this.logger.info({
-      trace_id, workflow_run_id, actions, totalSteps
-    }, 'Starting multi-step workflow');
+      trace_id, workflow_run_id, workflowType, totalSteps
+    }, 'Starting dynamic config-driven workflow');
 
     // Create workflow state in Supabase
     try {
       await createWorkflowState({
         workflow_run_id, trace_id, user_id: chat_id,
-        workflow_type: 'multi_step_campaign', total_steps: totalSteps
+        workflow_type: workflowType, total_steps: totalSteps
       });
     } catch (err) {
       this.logger.warn({ error: err.message }, 'Failed to create workflow state');
     }
 
     const results = {};
-    let currentStep = 0;
-    let lastContext = null;
+    let currentStepNum = 0;
 
-    // Execute each step sequentially
-    for (const action of actions) {
-      currentStep++;
-      this.logger.info({ trace_id, workflow_run_id, step: currentStep, action }, `Workflow step ${currentStep}`);
+    // Execute each step sequentially (resolving DAG inputs)
+    for (const step of steps) {
+      currentStepNum++;
+      this.logger.info({ trace_id, workflow_run_id, step: currentStepNum, stepId: step.id }, `Workflow step ${currentStepNum}: ${step.id}`);
 
       try {
-        if (action === 'research') {
-          const researchResult = await this._stepResearch(trace_id, workflow_run_id, chat_id, userMessage, memories);
-          results.research = researchResult;
-          lastContext = researchResult;
+        // Resolve inputs dynamically
+        const resolvedInputs = {};
+        for (const [key, value] of Object.entries(step.inputs || {})) {
+          if (typeof value === 'string') {
+            if (value === '$input.userMessage') {
+              resolvedInputs[key] = userMessage;
+            } else if (value === '$input.memories') {
+              resolvedInputs[key] = memories;
+            } else if (value.startsWith('$steps.')) {
+              const parts = value.split('.');
+              const sourceStepId = parts[1];
+              const field = parts[2];
+              const stepResult = results[sourceStepId];
+              resolvedInputs[key] = stepResult ? stepResult[field] || stepResult : null;
+            } else {
+              resolvedInputs[key] = value;
+            }
+          } else {
+            resolvedInputs[key] = value;
+          }
+        }
+
+        // Execute step action
+        let stepResult = null;
+        if (step.action === 'research') {
+          stepResult = await this._stepResearch(trace_id, workflow_run_id, chat_id, resolvedInputs.userMessage, resolvedInputs.memories);
+          results.research = stepResult;
 
           // Save research report
-          if (researchResult?.result) {
+          if (stepResult?.result) {
             try {
               await saveResearchReport({
                 trace_id, workflow_run_id,
-                title: researchResult.result.title || 'Research Report',
-                summary: researchResult.result.summary || '',
-                key_findings: researchResult.result.key_findings || [],
-                sources: researchResult.sources || []
+                title: stepResult.result.title || 'Research Report',
+                summary: stepResult.result.summary || '',
+                key_findings: stepResult.result.key_findings || [],
+                sources: stepResult.sources || []
               });
             } catch (err) {
               this.logger.warn({ error: err.message }, 'Failed to save research report');
             }
           }
-        } else if (action === 'image') {
-          const imageResult = await this._stepImage(trace_id, workflow_run_id, chat_id, userMessage, lastContext);
-          results.image = imageResult;
+        } else if (step.action === 'image') {
+          stepResult = await this._stepImage(trace_id, workflow_run_id, chat_id, resolvedInputs.userMessage, resolvedInputs.context);
+          results.image = stepResult;
 
           // Save image prompt
-          if (imageResult?.result) {
+          if (stepResult?.result) {
             try {
               await saveImagePrompt({
                 trace_id, workflow_run_id,
-                prompt: imageResult.result.prompt || '',
-                negative_prompt: imageResult.result.negative_prompt || '',
-                style: imageResult.result.style || 'photorealistic',
-                dimensions: imageResult.result.dimensions || {}
+                prompt: stepResult.result.prompt || '',
+                negative_prompt: stepResult.result.negative_prompt || '',
+                style: stepResult.result.style || 'photorealistic',
+                dimensions: stepResult.result.dimensions || {}
               });
             } catch (err) {
               this.logger.warn({ error: err.message }, 'Failed to save image prompt');
             }
           }
+        } else {
+          throw new Error(`Unsupported workflow step action: ${step.action}`);
         }
 
         // Update workflow state
         try {
           await updateWorkflowState(workflow_run_id, {
-            current_step: currentStep,
-            steps_completed: actions.slice(0, currentStep),
+            current_step: currentStepNum,
+            steps_completed: steps.slice(0, currentStepNum).map(s => s.id),
             intermediate_results: results,
-            status: currentStep === totalSteps ? 'completed_draft' : 'in_progress'
+            status: currentStepNum === totalSteps ? 'completed_draft' : 'in_progress'
           });
         } catch (err) {
           this.logger.warn({ error: err.message }, 'Failed to update workflow state');
         }
 
       } catch (error) {
-        this.logger.error({ trace_id, step: currentStep, action, error: error.message }, 'Workflow step failed');
-        results[action] = { status: 'error', error: error.message };
+        this.logger.error({ trace_id, step: currentStepNum, stepId: step.id, error: error.message }, 'Workflow step failed');
+        results[step.id] = { status: 'error', error: error.message };
       }
     }
 
     // Compile final response
-    const compiledResponse = this._compileResponse(results, actions);
+    const compiledResponse = this._compileResponse(results, steps.map(s => s.id));
 
     await saveActivityLog({
       trace_id, workflow_run_id, service: 'brain', action: 'workflow_complete',
@@ -136,7 +190,7 @@ class WorkflowOrchestrator {
       status: 'success',
       response: compiledResponse,
       result: results,
-      metadata: { workflow_run_id, steps_completed: actions }
+      metadata: { workflow_run_id, steps_completed: steps.map(s => s.id) }
     };
   }
 
